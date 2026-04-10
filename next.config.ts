@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
                 hostname: 'covers.openlibrary.org',
                 port: '',
                 pathname: '/**',
-            }
+            },
+            {protocol: 'https', hostname: '8esumdn3fz1zavfy.public.blob.vercel-storage.com'}
         ]}
 };
 
