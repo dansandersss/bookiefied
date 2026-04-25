@@ -19,6 +19,7 @@ export interface IBook extends Document {
     fileURL: string;
     fileBlobKey: string;
     coverURL: string;
+    coverColor?: string;
     coverBlobKey?: string;
     fileSize: number;
     totalSegments: number;
@@ -63,6 +64,7 @@ export interface CreateBook {
     fileURL: string;
     fileBlobKey: string;
     coverURL?: string;
+    coverColor?: string;
     coverBlobKey?: string;
     fileSize: number;
 }
@@ -78,6 +80,7 @@ export interface BookCardProps {
     title: string;
     author: string;
     coverURL: string;
+    coverColor?: string;
     slug: string;
 }
 

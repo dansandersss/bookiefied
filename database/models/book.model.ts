@@ -10,6 +10,7 @@ const BookSchema = new Schema<IBook>({
     fileURL: { type: String, required: true },
     fileBlobKey: { type: String, required: true },
     coverURL: { type: String },
+    coverColor: { type: String },
     coverBlobKey: { type: String },
     fileSize: { type: Number, required: true },
     totalSegments: { type: Number, default: 0 },

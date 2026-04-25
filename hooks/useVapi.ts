@@ -38,13 +38,13 @@ function getVapi() {
     return vapi;
 }
 
-export type CallStatus = 'ready' | 'connecting' | 'starting' | 'listening' | 'thinking' | 'speaking';
+export type CallStatus = 'idle' | 'connecting' | 'starting' | 'listening' | 'thinking' | 'speaking';
 
 export function useVapi(book: IBook) {
     const { userId } = useAuth();
     const { limits } = useSubscription();
 
-    const [status, setStatus] = useState<CallStatus>('ready');
+    const [status, setStatus] = useState<CallStatus>('idle');
     const [messages, setMessages] = useState<Messages[]>([]);
     const [currentMessage, setCurrentMessage] = useState('');
     const [currentUserMessage, setCurrentUserMessage] = useState('');
@@ -95,7 +95,7 @@ export function useVapi(book: IBook) {
 
             'call-end': () => {
                 // Don't reset isStoppingRef here - delayed events may still fire
-                setStatus('ready');
+                setStatus('idle');
                 setCurrentMessage('');
                 setCurrentUserMessage('');
 
@@ -173,7 +173,7 @@ export function useVapi(book: IBook) {
             error: (error: Error) => {
                 console.error('Vapi error:', error);
                 // Don't reset isStoppingRef here - delayed events may still fire
-                setStatus('ready');
+                setStatus('idle');
                 setCurrentMessage('');
                 setCurrentUserMessage('');
 
@@ -244,7 +244,7 @@ export function useVapi(book: IBook) {
             if (!result.success) {
                 setLimitError(result.error || 'Session limit reached. Please upgrade your plan.');
                 setIsBillingError(!!result.isBillingError);
-                setStatus('ready');
+                setStatus('idle');
                 return;
             }
 
@@ -273,7 +273,7 @@ export function useVapi(book: IBook) {
             });
         } catch (err) {
             console.error('Failed to start call:', err);
-            setStatus('ready');
+            setStatus('idle');
             setLimitError('Failed to start voice session. Please try again.');
         }
     }, [book._id, book.title, book.author, voice, userId]);
