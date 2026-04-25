@@ -59,17 +59,9 @@ const UploadForm = () => {
                 router.push(`/books/${existsCheck.book.slug}`)
                 return;
             }
-            console.log("pdfFile:", data.pdfFile);
-            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
-            const pdfFile =
-                data.pdfFile instanceof File
-                    ? data.pdfFile
-                    : data.pdfFile?.[0];
 
-            if (!pdfFile) {
-                toast.error("PDF file is missing");
-                return;
-            }
+            const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
+            const pdfFile = data.pdfFile;
 
             const parsedPDF = await parsePDFFile(pdfFile);
 
@@ -86,8 +78,8 @@ const UploadForm = () => {
 
             let coverUrl: string;
 
-            if(data.coverImage && data.coverImage.length > 0) {
-                const coverFile = data.coverImage[0];
+            if(data.coverImage) {
+                const coverFile = data.coverImage;
                 const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, coverFile, {
                     access: 'public',
                     handleUploadUrl: '/api/upload',
