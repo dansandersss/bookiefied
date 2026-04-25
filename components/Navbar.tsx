@@ -48,10 +48,12 @@ const Navbar = () => {
                         </Show>
                         <Show when="signed-in">
                             <div className="nav-user-link">
-                                <UserButton afterSignOutUrl="/" />
-                                {user ? .firstName && (
-                                    <Link href='/subscriptions' className="nav-user-name">{user.firstName}</Link>
-                                    )}
+                                <UserButton />
+                                {user?.firstName && (
+                                    <Link href="/subscriptions" className="nav-user-name">
+                                        {user.firstName}
+                                    </Link>
+                                )}
                             </div>
                         </Show>
                     </div>
