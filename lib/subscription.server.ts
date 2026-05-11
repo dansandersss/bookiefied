@@ -9,6 +9,18 @@ export const getUserPlan = async (): Promise<PlanType> => {
     if (has({ plan: "pro" })) return PLANS.PRO;
     if (has({ plan: "standard" })) return PLANS.STANDARD;
 
+    // Fallback to metadata check if 'has' (roles/permissions) doesn't catch it
+    const { currentUser } = await import("@clerk/nextjs/server");
+    const user = await currentUser();
+
+    const metadataPlan = (
+        user?.publicMetadata?.plan ||
+        user?.publicMetadata?.billingPlan
+    )?.toString().toLowerCase();
+
+    if (metadataPlan === 'pro') return PLANS.PRO;
+    if (metadataPlan === 'standard') return PLANS.STANDARD;
+
     return PLANS.FREE;
 }
 

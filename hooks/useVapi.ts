@@ -11,6 +11,7 @@ import { ASSISTANT_ID, DEFAULT_VOICE, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/types';
 import { startVoiceSession, endVoiceSession } from '@/lib/actions/session.actions';
+import { getChatHistory, saveChatMessage } from '@/lib/actions/chat.actions';
 
 export function useLatestRef<T>(value: T) {
     const ref = useRef(value);
@@ -62,6 +63,26 @@ export function useVapi(book: IBook) {
     const maxDurationRef = useLatestRef(maxDurationSeconds);
     const durationRef = useLatestRef(duration);
     const voice = book.persona || DEFAULT_VOICE;
+
+    // Load chat history on mount
+    useEffect(() => {
+        const loadHistory = async () => {
+            if (!book._id) return;
+            try {
+                const result = await getChatHistory(book._id);
+                if (result.success && result.data) {
+                    setMessages(result.data.map((m: any) => ({
+                        role: m.role,
+                        content: m.content
+                    })));
+                }
+            } catch (err) {
+                console.error('Failed to load chat history:', err);
+            }
+        };
+
+        loadHistory();
+    }, [book._id]);
 
     // Set up Vapi event listeners
     useEffect(() => {
@@ -163,15 +184,30 @@ export function useVapi(book: IBook) {
 
                     setMessages((prev) => {
                         const isDupe = prev.some(
-                            (m) => m.role === message.role && m.content === message.transcript,
+                            (m) => m.role === message.role && m.content.trim() === message.transcript.trim(),
                         );
-                        return isDupe ? prev : [...prev, { role: message.role, content: message.transcript }];
+                        if (isDupe) return prev;
+                        return [...prev, { role: message.role, content: message.transcript }];
                     });
+
+                    // Save to database outside of setMessages to avoid "update during render" issues
+                    saveChatMessage(book._id, message.role, message.transcript).catch(err => 
+                        console.error('Failed to save message:', err)
+                    );
                 }
             },
 
-            error: (error: Error) => {
+            error: (error: any) => {
                 console.error('Vapi error:', error);
+                
+                // If it's an object, log its properties as well
+                if (typeof error === 'object' && error !== null) {
+                    try {
+                        console.error('Vapi error details:', JSON.stringify(error, null, 2));
+                    } catch (e) {
+                        console.error('Vapi error details (non-serializable):', error);
+                    }
+                }
                 // Don't reset isStoppingRef here - delayed events may still fire
                 setStatus('idle');
                 setCurrentMessage('');
@@ -192,7 +228,7 @@ export function useVapi(book: IBook) {
                 }
 
                 // Show user-friendly error message
-                const errorMessage = error.message?.toLowerCase() || '';
+                const errorMessage = (error?.message || error?.error || JSON.stringify(error) || '').toLowerCase();
                 if (errorMessage.includes('timeout') || errorMessage.includes('silence')) {
                     setLimitError('Session ended due to inactivity. Click the mic to start again.');
                 } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
@@ -227,7 +263,7 @@ export function useVapi(book: IBook) {
         };
     }, []);
 
-    const start = useCallback(async () => {
+    const start = useCallback(async (initialMessage?: string) => {
         if (!userId) {
             setLimitError('Please sign in to start a voice session.');
             return;
@@ -242,9 +278,10 @@ export function useVapi(book: IBook) {
             const result = await startVoiceSession(userId, book._id);
 
             if (!result.success) {
+                // Return early if no active session could be created
+                setStatus('idle');
                 setLimitError(result.error || 'Session limit reached. Please upgrade your plan.');
                 setIsBillingError(!!result.isBillingError);
-                setStatus('idle');
                 return;
             }
 
@@ -252,7 +289,7 @@ export function useVapi(book: IBook) {
             // Note: Server-returned maxDurationMinutes is informational only
             // The actual limit is enforced by useLatestRef(limits.maxSessionMinutes * 60)
 
-            const firstMessage = `Hey, good to meet you. Quick question before we dive in - have you actually read ${book.title} yet, or are we starting fresh?`;
+            const firstMessage = initialMessage || `Hey, good to meet you. Quick question before we dive in - have you actually read ${book.title} yet, or are we starting fresh?`;
 
             await getVapi().start(ASSISTANT_ID, {
                 firstMessage,
@@ -281,6 +318,47 @@ export function useVapi(book: IBook) {
     const stop = useCallback(() => {
         isStoppingRef.current = true;
         getVapi().stop();
+    }, []);
+
+    const sendTextMessage = useCallback(async (text: string) => {
+        if (!text.trim()) return;
+
+        // Add to local messages immediately for UI responsiveness
+        setMessages((prev) => [...prev, { role: 'user', content: text }]);
+        
+        // Save to database
+        saveChatMessage(book._id, 'user', text).catch(err => 
+            console.error('Failed to save text message:', err)
+        );
+
+        // If session is idle, start it with this message
+        if (status === 'idle') {
+            await start(text);
+            return;
+        }
+
+        // Send to Vapi if session is active
+        try {
+            getVapi().send({
+                type: 'add-message',
+                message: {
+                    role: 'user',
+                    content: text,
+                },
+            });
+            
+            if (status === 'listening') {
+                 setStatus('thinking');
+            }
+        } catch (e) {
+            console.error("Error sending text message:", e);
+        }
+    }, [status, book._id, start]);
+
+    const resetHistory = useCallback(() => {
+        setMessages([]);
+        setCurrentMessage('');
+        setCurrentUserMessage('');
     }, []);
 
     const clearError = useCallback(() => {
@@ -313,6 +391,8 @@ export function useVapi(book: IBook) {
         isBillingError,
         maxDurationSeconds,
         clearError,
+        sendTextMessage,
+        resetHistory,
         // maxDurationSeconds,
         // remainingSeconds,
         // showTimeWarning,

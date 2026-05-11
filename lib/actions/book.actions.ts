@@ -8,22 +8,31 @@ import BookSegment from "@/database/models/book-segment.model";
 import mongoose from "mongoose";
 import {getUserPlan} from "@/lib/subscription.server";
 import {revalidatePath} from "next/cache";
+import {PLAN_LIMITS} from "@/lib/subscription-constants";
 
 export const getAllBooks = async (search?: string) => {
     try {
         await connectToDatabase();
 
-        let query = {};
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return {
+                success: true,
+                data: []
+            }
+        }
+
+        let query: any = { clerkId: userId };
 
         if (search) {
             const escapedSearch = escapeRegex(search);
             const regex = new RegExp(escapedSearch, 'i');
-            query = {
-                $or: [
-                    { title: { $regex: regex } },
-                    { author: { $regex: regex } },
-                ]
-            };
+            query.$or = [
+                { title: { $regex: regex } },
+                { author: { $regex: regex } },
+            ];
         }
 
         const books = await Book.find(query).sort({ createdAt: -1 }).lean();
@@ -44,9 +53,16 @@ export const checkBookExists = async (title: string) => {
     try {
         await connectToDatabase();
 
-        const slug = generateSlug(title);
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
 
-        const existingBook = await Book.findOne({slug}).lean();
+        if (!userId) {
+            return { exists: false, error: 'Unauthorized' };
+        }
+
+        const slug = `${generateSlug(title)}-${userId.slice(-6)}`;
+
+        const existingBook = await Book.findOne({slug, clerkId: userId}).lean();
 
         if(existingBook) {
             return {
@@ -70,9 +86,16 @@ export const createBook = async (data: CreateBook) => {
     try {
         await connectToDatabase();
 
-        const slug = generateSlug(data.title);
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
 
-        const existingBook = await Book.findOne({slug}).lean();
+        if (!userId || userId !== data.clerkId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const slug = `${generateSlug(data.title)}-${userId.slice(-6)}`;
+
+        const existingBook = await Book.findOne({slug, clerkId: userId}).lean();
 
         if(existingBook) {
             return {
@@ -82,26 +105,13 @@ export const createBook = async (data: CreateBook) => {
             }
         }
 
-        // Todo: Check subscription limits before creating a book
-        const { getUserPlan } = await import("@/lib/subscription.server");
-        const { PLAN_LIMITS } = await import("@/lib/subscription-constants");
-
-        const { auth } = await import("@clerk/nextjs/server");
-        const { userId } = await auth();
-
-        if (!userId || userId !== data.clerkId) {
-            return { success: false, error: "Unauthorized" };
-        }
-
+        // Check subscription limits before creating a book
         const plan = await getUserPlan();
         const limits = PLAN_LIMITS[plan];
 
         const bookCount = await Book.countDocuments({ clerkId: userId });
 
         if (bookCount >= limits.maxBooks) {
-            const { revalidatePath } = await import("next/cache");
-            revalidatePath("/");
-
             return {
                 success: false,
                 error: `You have reached the maximum number of books allowed for your ${plan} plan (${limits.maxBooks}). Please upgrade to add more books.`,
@@ -131,7 +141,14 @@ export const getBookBySlug = async (slug: string) => {
     try {
         await connectToDatabase();
 
-        const book = await Book.findOne({ slug }).lean();
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const book = await Book.findOne({ slug, clerkId: userId }).lean();
 
         if (!book) {
             return { success: false, error: 'Book not found' };
@@ -234,3 +251,77 @@ export const searchBookSegments = async (bookId: string, query: string, limit: n
         };
     }
 };
+
+export const updateBook = async (bookId: string, data: { title?: string; author?: string }) => {
+    try {
+        await connectToDatabase();
+
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const updateData: any = { ...data };
+
+        // If title is changing, we should probably update the slug too to keep it consistent
+        if (data.title) {
+            updateData.slug = `${generateSlug(data.title)}-${userId.slice(-6)}`;
+        }
+
+        const book = await Book.findOneAndUpdate(
+            { _id: bookId, clerkId: userId },
+            { $set: updateData },
+            { new: true }
+        ).lean();
+
+        if (!book) {
+            return { success: false, error: 'Book not found' };
+        }
+
+        revalidatePath('/');
+        revalidatePath(`/books/${book.slug}`);
+
+        return {
+            success: true,
+            data: serializeData(book)
+        };
+    } catch (e) {
+        console.error('Error updating book', e);
+        return { success: false, error: 'Failed to update book' };
+    }
+}
+
+export const deleteBook = async (bookId: string) => {
+    try {
+        await connectToDatabase();
+
+        const { auth } = await import("@clerk/nextjs/server");
+        const { userId } = await auth();
+
+        if (!userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const book = await Book.findOneAndDelete({ _id: bookId, clerkId: userId });
+
+        if (!book) {
+            return { success: false, error: 'Book not found' };
+        }
+
+        // Clean up related data
+        await BookSegment.deleteMany({ bookId });
+        const ChatMessage = (await import("@/database/models/chat-message.model")).default;
+        await ChatMessage.deleteMany({ bookId, clerkId: userId });
+
+        revalidatePath('/');
+
+        return {
+            success: true
+        };
+    } catch (e) {
+        console.error('Error deleting book', e);
+        return { success: false, error: 'Failed to delete book' };
+    }
+}

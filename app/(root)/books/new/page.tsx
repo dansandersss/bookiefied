@@ -1,7 +1,15 @@
 import React from 'react'
 import UploadForm from "@/components/UploadForm";
+import {auth} from "@clerk/nextjs/server";
+import {redirect} from "next/navigation";
 
-const Page = () => {
+const Page = async () => {
+    const { userId } = await auth();
+
+    if (!userId) {
+        redirect('/sign-in');
+    }
+
     return (
         <main className="wrapper container">
             <div className="mx-auto max-w-180 space-y-10">

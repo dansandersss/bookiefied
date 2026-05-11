@@ -409,13 +409,15 @@
         @apply absolute inset-0 w-[50px] h-[50px] sm:w-[60px] sm:h-[60px] bg-white rounded-full opacity-50 animate-ping;
     }
     .vapi-mic-btn {
-        @apply relative w-[50px] h-[50px] sm:w-[60px] sm:h-[60px] cursor-pointer rounded-full flex items-center justify-center transition-all duration-300 border-0 bg-white;
+        @apply relative w-[50px] h-[50px] sm:w-[60px] sm:h-[60px] cursor-pointer rounded-full flex items-center justify-center transition-all duration-300 border-2;
+
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 
         &:hover {
             transform: scale(1.05);
         }
         &:hover svg {
-            @apply text-[#aaa];
+            @apply opacity-70;
         }
         &:active {
             transform: scale(0.95);
@@ -425,10 +427,10 @@
         }
     }
     .vapi-mic-btn-active {
-        @apply bg-white;
+        @apply border-[#212a3b]/10;
     }
     .vapi-mic-btn-inactive {
-        @apply bg-white;
+        @apply border-white;
     }
     .vapi-badge-ai {
         @apply inline-block bg-white px-3 py-2 rounded-[4px];
@@ -614,6 +616,18 @@
     }
     .transcript-empty-hint {
         @apply text-[var(--text-muted)] text-sm mt-1;
+    }
+    .transcript-input-wrapper {
+        @apply p-4 border-t border-[var(--border-subtle)] bg-white rounded-b-[14px];
+    }
+    .transcript-input-form {
+        @apply flex items-center gap-2 bg-[#f8f9fa] rounded-full px-4 py-2 border border-[var(--border-subtle)] focus-within:border-[var(--accent-warm)] transition-colors;
+    }
+    .transcript-input-field {
+        @apply flex-1 bg-transparent border-none outline-none text-base text-[#212a3b] placeholder:text-gray-400 py-1;
+    }
+    .transcript-send-btn {
+        @apply text-[#212a3b] hover:text-[#663820] transition-colors p-1 disabled:opacity-50 disabled:cursor-not-allowed;
     }
 
     /* ===========================================
